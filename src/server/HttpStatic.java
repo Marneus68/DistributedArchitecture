@@ -13,9 +13,11 @@ import java.util.*;
 public class HttpStatic {
     public static final int PORT = 8181;
 
+    final static String CRLF = "\r\n";
     public static void main(String [] args) throws Exception{
 
         Map<Integer, Domain> domains = new HashMap<Integer, Domain>();
+        String filename = "" ;
 
         Properties props = new Properties();
         InputStream input = new FileInputStream("config.ini");
@@ -47,28 +49,32 @@ public class HttpStatic {
                     PrintWriter out = new PrintWriter(s.getOutputStream(), true);
                     BufferedReader in = new BufferedReader(new InputStreamReader( s.getInputStream()));
                     String domainName = "";
-                    String line;
-                    while ((line = in.readLine()) != null) {
+                    String line =null;
+
+                    while ((line = in.readLine()) != null && !line.isEmpty()) {
+                        if (line.startsWith("GET ")) {
+                            System.out.println("in get ====>"+ line);
+                            filename = line.replace("GET ", "").split(" ")[0];
+                        }
+                        System.out.println("header: "+line);
                         if (line.startsWith("Host: ")) {
                             domainName = line.replace("Host: ", "").split(":")[0];
-                            break;
                         }
                     }
 
+
                     for(Map.Entry<Integer, Domain> entry : domains.entrySet()) {
-                        //Integer key = entry.getKey();
                         Domain dom = entry.getValue();
                         if (dom.name.equals(domainName)) {
-                            HttpRequestHandler request = new HttpRequestHandler(s, dom.documentRoot);
+                            HttpRequestHandler request = new HttpRequestHandler(s, dom.documentRoot, filename, domainName);
                             Thread thread = new Thread(request);
                             thread.start();
                         }
                     }
                 } catch (Exception e) {
                     System.err.println(e);
-                } finally {
-                    s.close();
                 }
+
             }
         } finally {
             ss.close();
