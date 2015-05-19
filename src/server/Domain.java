@@ -8,7 +8,8 @@ public class Domain {
     public String name;
     public String documentRoot;
 
-    public Domain() {}
+    public Domain() {
+    }
 
     public Domain(String name, String documentRoot) {
         this.name = name;

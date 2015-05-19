@@ -27,7 +27,6 @@ public class HttpRequestHandler implements Runnable {
         this.contentPath = contentPath;
         filename = filenameIn;
         domainName = domainNameIn;
-
     }
 
     public void run() {
@@ -41,23 +40,19 @@ public class HttpRequestHandler implements Runnable {
     private void processRequest() throws Exception {
         while (true) {
             String removeStartPath = "";
+
             if (contentPath.startsWith("~" + File.separator)) {
                 contentPath = System.getProperty("user.home") + contentPath.substring(1);
-                removeStartPath =  contentPath;
-            }
-            else {
+                removeStartPath = contentPath;
+            } else {
                 removeStartPath = contentPath;
             }
 
-
-
-            if(!filename.isEmpty() && !filename.equals("/favicon.ico")){
-                System.out.println("folder filename"+ filename);
+            if (!filename.isEmpty() && !filename.equals("/favicon.ico")) {
                 contentPath += filename;
             }
 
             File repo = new File(contentPath);
-
             String serverLine = "Server: Simple Java Http Server";
             String statusLine = null;
             String contentTypeLine = null;
@@ -77,28 +72,26 @@ public class HttpRequestHandler implements Runnable {
                 contentLengthLine = "Content-Length: "
                         + (new Integer(fis.available())).toString() + CRLF;
             }
-            else if(repo.isDirectory()) {
+            else if (repo.isDirectory()) {
 
                 File[] fileList = repo.listFiles();
-                String htmlList= "";
-                for(int i=0; i < fileList.length; i++){
+                String htmlList = "";
+                for (int i = 0; i < fileList.length; i++) {
                     String href = String.valueOf(fileList[i]);
-                    href = href.replace(contentPath, "")+filename;
-                    System.out.println("file href"+ href+"\n  String to trim "+removeStartPath+" content path: "+contentPath);
-                    htmlList += "<a href=\"http://"+domainName+":8181/"+href+"\">"+ fileList[i]+ "</a><br>";
+                    href = href.replace(removeStartPath, "");
+                    htmlList += "<a href=\"http://" + domainName + href + "\">" + fileList[i] + "</a><br>";
                 }
                 statusLine = "HTTP/1.0 200 OK" + CRLF;
                 contentTypeLine = "Content-type: " + "text/html" + CRLF;
                 entityBody = "<HTML>"
                         + "<HEAD><TITLE>repository</TITLE></HEAD>"
                         + "<BODY>repository"
-                        +"<p>"+ htmlList
-                        +"</p>"
+                        + "<p>" + htmlList
+                        + "</p>"
                         + "<br>usage:http://yourHostName:port/"
                         + "fileName.html</BODY></HTML>";
 
-            }
-            else {
+            } else {
                 statusLine = "HTTP/1.0 404 Not Found" + CRLF;
                 contentTypeLine = "Content-type: " + "text/html" + CRLF;
                 entityBody = "<HTML>"
@@ -125,7 +118,7 @@ public class HttpRequestHandler implements Runnable {
             if (repo.isFile()) {
                 sendBytes(fis, output);
                 fis.close();
-            } else  {
+            } else {
                 output.write(entityBody.getBytes());
             }
 
@@ -133,7 +126,7 @@ public class HttpRequestHandler implements Runnable {
                 output.close();
                 br.close();
                 socket.close();
-            } catch (Exception e){
+            } catch (Exception e) {
             }
         }
     }
