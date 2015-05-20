@@ -59,16 +59,15 @@ public class HttpStatic {
                     String line = null;
 
                     while ((line = in.readLine()) != null && !line.isEmpty()) {
+                        System.out.println("header: " + line);
                         if (line.startsWith("GET ")) {
                             filename = line.replace("GET ", "").split(" ")[0];
                         }
-                        System.out.println("header: " + line);
                         if (line.startsWith("Host: ")) {
                             domainName = line.replace("Host: ", "").split(":")[0];
                             hostName = line.replace("Host: ", "");
                         }
                     }
-
 
                     for (Map.Entry<Integer, Domain> entry : domains.entrySet()) {
                         Domain dom = entry.getValue();
