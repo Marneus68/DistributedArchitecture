@@ -1,6 +1,9 @@
 package server;
 
+import pools.esgi.com.Pool;
+
 import java.io.*;
+import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.StringTokenizer;
 
@@ -38,7 +41,10 @@ public class HttpRequestHandler implements Runnable {
     }
 
     private void processRequest() throws Exception {
+
+
         while (true) {
+
             String removeStartPath = "";
 
             if (contentPath.startsWith("~" + File.separator)) {

@@ -1,5 +1,7 @@
 package server;
 
+import pools.esgi.com.Pool;
+
 import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
@@ -14,15 +16,23 @@ public class HttpStatic {
     public static int PORT = 8181;
 
     final static String CRLF = "\r\n";
+    public static boolean withSession = false;
 
     public static void main(String[] args) throws Exception {
         int port = PORT;
         String hostName = null;
 
-        if (args.length > 0) {
+        if (2 == args.length) {
+            port = Integer.valueOf(args[0]);
+            withSession = args[1].equals("--with-session")? true: false;
+            System.out.println("******* with session****** "+withSession+ " value: "+args[1]);
+        }
+        else if(1 == args.length){
             port = Integer.valueOf(args[0]);
         }
 
+
+        Pool threadPool  = new Pool(7);
         Map<Integer, Domain> domains = new HashMap<Integer, Domain>();
         String filename = "";
 
@@ -56,6 +66,7 @@ public class HttpStatic {
                     PrintWriter out = new PrintWriter(s.getOutputStream(), true);
                     BufferedReader in = new BufferedReader(new InputStreamReader(s.getInputStream()));
                     String domainName = "";
+                    String sessionInfo = "";
                     String line = null;
 
                     while ((line = in.readLine()) != null && !line.isEmpty()) {
@@ -67,14 +78,22 @@ public class HttpStatic {
                             domainName = line.replace("Host: ", "").split(":")[0];
                             hostName = line.replace("Host: ", "");
                         }
+                        if(withSession && line.startsWith("Set-Cookie:")){
+                            sessionInfo = line.replace("Set-Cookie:", "");
+                        }
                     }
 
                     for (Map.Entry<Integer, Domain> entry : domains.entrySet()) {
                         Domain dom = entry.getValue();
                         if (dom.name.equals(domainName)) {
-                            HttpRequestHandler request = new HttpRequestHandler(s, dom.documentRoot, filename, hostName);
-                            Thread thread = new Thread(request);
-                            thread.start();
+                            if(withSession){
+                                HttpRequestWithSession request = new HttpRequestWithSession(s, dom.documentRoot, filename, hostName, sessionInfo);
+                                threadPool.addJob(request);
+
+                            }else {
+                                HttpRequestHandler request = new HttpRequestHandler(s, dom.documentRoot, filename, hostName);
+                                threadPool.addJob(request);
+                            }
                         }
                     }
                 } catch (Exception e) {
@@ -83,7 +102,8 @@ public class HttpStatic {
 
             }
         } finally {
-            ss.close();
+            if(ss != null)
+                ss.close();
         }
     }
 }
