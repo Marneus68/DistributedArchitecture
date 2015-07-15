@@ -1,17 +1,16 @@
 package server;
 
-import pools.esgi.com.Pool;
-
-import java.io.*;
-import java.net.ServerSocket;
-import java.net.Socket;
-import java.util.StringTokenizer;
-
 /**
- * File created by duane
- * 2015-05-18 | 12:19 PM
+ * Created by madalien on 14/07/15.
  */
-public class HttpRequestHandler implements Runnable {
+import java.io.*;
+import java.net.Socket;
+import java.util.List;
+
+import dns.registration.Registrar;
+import dns.server.ClientDNS;
+public class HttpDnsClientHandler implements Runnable {
+
     final static String CRLF = "\r\n";
 
     String contentPath;
@@ -21,15 +20,18 @@ public class HttpRequestHandler implements Runnable {
     BufferedReader br;
     String filename;
     String domainName;
+    String domainToLookup;
+    String dnsRequestType;
 
-    public HttpRequestHandler(Socket socket, String contentPath, String filenameIn, String domainNameIn) throws Exception {
+    public HttpDnsClientHandler(Socket socket, String domainToLookupIn, String typeIn) throws Exception {
         this.socket = socket;
         this.input = socket.getInputStream();
         this.output = socket.getOutputStream();
-        this.br = new BufferedReader(new InputStreamReader(socket.getInputStream()));
-        this.contentPath = contentPath;
-        filename = filenameIn;
-        domainName = domainNameIn;
+        //this.br = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+        dnsRequestType = typeIn;
+        domainToLookup = domainToLookupIn;
+        //ClientDNS client = new ClientDNS("localhost", 6767);
+
     }
 
     public void run() {
@@ -45,55 +47,65 @@ public class HttpRequestHandler implements Runnable {
 
         while (true) {
 
-            String removeStartPath = "";
+             // goole public dns or use the local 192.168.1.254  cat /etc/resolv.conf
+        //ClientDNS client = new ClientDNS("8.8.8.a8", 53);
+            //local server dns
+        //ClientDNS client = new ClientDNS("127.0.0.1", 8383);
+            // local network dns server
+            ClientDNS client = null;
+            List<String> ips = null;
+            StringBuilder htmlListIps = null;
+            String htmlTitle = null;
+            String htmlcontent = null;
+            System.out.println(" status type ==> "+ dnsRequestType);
+            if( dnsRequestType.equals("client")) {
+                client = new ClientDNS("8.8.8.8", 53);
+                ips = client.getIpfromDomain(false, new String[]{domainToLookup});
+                if (ips == null || ips.isEmpty()) {
+                    client = new ClientDNS("192.168.1.254", 53);
+                    ips = client.getIpfromDomain(false, new String[]{domainToLookup});
+                }
 
-            if (contentPath.startsWith("~" + File.separator)) {
-                contentPath = System.getProperty("user.home") + contentPath.substring(1);
-                removeStartPath = contentPath;
-            } else {
-                removeStartPath = contentPath;
+                htmlTitle = "DNS lookup from google or Fai ips for "+ domainToLookup;
+            }else if(dnsRequestType.equals("localdns")){
+
+                client = new ClientDNS("localhost", 8000);
+                ips = client.getIpfromDomain(false, new String[]{domainToLookup});
+                htmlTitle = "DNS lookup from local dns server "+ domainToLookup;
             }
 
-            if (!filename.isEmpty() && !filename.equals("/favicon.ico")) {
-                contentPath += filename;
+            if(dnsRequestType.equals("registrar")){
+                Registrar registrar = new Registrar();
+                registrar.register(domainToLookup);
+                htmlTitle = "Register domain "+ domainToLookup;
+                htmlcontent = "<p> The domain "+domainToLookup+" has been successfully registered</p>";
+            }else {
+
+                htmlListIps = new StringBuilder("");
+                for (String ip : ips) {
+                    htmlListIps.append("<p>" + ip + "</p>");
+                    System.out.println("ip: " + ip);
+                }
+                htmlcontent = htmlListIps.toString();
             }
 
-            File repo = new File(contentPath);
+
+
             String serverLine = "Server: Simple Java Http Server";
             String statusLine = null;
             String contentTypeLine = null;
             String entityBody = null;
             String contentLengthLine = "";
-            FileInputStream fis = null;
-            if (repo.isFile()) {
 
-                boolean fileExists = true;
-                try {
-                    fis = new FileInputStream(contentPath);
-                } catch (FileNotFoundException e) {
-                    fileExists = false;
-                }
-                statusLine = "HTTP/1.0 200 OK" + CRLF;
-                contentTypeLine = "Content-type: " + contentType(contentPath) + CRLF;
-                contentLengthLine = "Content-Length: "
-                        + (new Integer(fis.available())).toString() + CRLF;
-            }
-            else if (repo.isDirectory()) {
 
-                File[] fileList = repo.listFiles();
-                String htmlList = "";
-                for (int i = 0; i < fileList.length; i++) {
-                    String href = String.valueOf(fileList[i]);
-                    href = href.replace(removeStartPath, "");
-                    htmlList += "<a href=\"http://" + domainName + href + "\">" + fileList[i] + "</a><br>";
-                }
+            if((htmlListIps != null) || dnsRequestType.equals("registrar")){
                 statusLine = "HTTP/1.0 200 OK" + CRLF;
                 contentTypeLine = "Content-type: " + "text/html" + CRLF;
                 entityBody = "<HTML>"
-                        + "<HEAD><TITLE>repository</TITLE></HEAD>"
+                        + "<HEAD><TITLE>"+htmlTitle+"</TITLE></HEAD>"
                         + "<BODY>repository"
-                        + "<p>" + htmlList
-                        + "</p>"
+                        +"<h3>DNS ips for "+ domainToLookup+"</h3>"
+                        + htmlcontent
                         + "<br>usage:http://yourHostName:port/"
                         + "fileName.html</BODY></HTML>";
 
@@ -121,25 +133,26 @@ public class HttpRequestHandler implements Runnable {
             // Send a blank line to indicate the end of the header lines.
             output.write(CRLF.getBytes());
             // Send the entity body.
-            if (repo.isFile()) {
-                sendBytes(fis, output);
-                fis.close();
-            } else {
-                output.write(entityBody.getBytes());
-            }
+
+            output.write(entityBody.getBytes());
+
+
 
             try {
                 if(output != null)
                 output.close();
 
-                if(br != null)
-                br.close();
+                //if(br != null)
+                //br.close();
 
                 if(socket != null)
                 socket.close();
 
+                break;
+
             } catch (Exception e) {
             }
+
         }
     }
 

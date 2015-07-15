@@ -1,5 +1,6 @@
 package server;
 
+import dns.server.ServerDNS;
 import pools.esgi.com.Pool;
 
 import java.io.*;
@@ -17,6 +18,12 @@ public class HttpStatic {
 
     final static String CRLF = "\r\n";
     public static boolean withSession = false;
+    public static boolean  dnsClient = false;
+    public static boolean  dnsClientServer = false;
+    public static boolean  dnsRegistrar = false;
+    public static String  dnsRequestType = "";
+    public static String  domainToLookUp = "";
+
 
     public static void main(String[] args) throws Exception {
         int port = PORT;
@@ -57,6 +64,11 @@ public class HttpStatic {
         System.out.println(domains.size() + " domains definitions loaded.");
 
         ServerSocket ss = new ServerSocket(port);
+
+        // init dns server
+        ServerDNS localDnsServer = new ServerDNS(8000, 9000);
+        // new thread for registrations
+        threadPool.addJob(localDnsServer);
         try {
 
             while (true) {
@@ -68,15 +80,40 @@ public class HttpStatic {
                     String domainName = "";
                     String sessionInfo = "";
                     String line = null;
+                    String dnsClientLookup = "";
+                    String dnsLookup = "";
+                    String registrarLookup = "";
 
                     while ((line = in.readLine()) != null && !line.isEmpty()) {
                         System.out.println("header: " + line);
                         if (line.startsWith("GET ")) {
                             filename = line.replace("GET ", "").split(" ")[0];
+                            dnsClientLookup = line.split("dns/client/").length > 1? line.split("dns/client/")[1]: line;
+                            System.out.print("client"+ dnsClientLookup);
+                            dnsLookup = line.split("dns/server/").length > 1? line.split("dns/server/")[1]: line;
+                            registrarLookup = (line.split("registrar/")).length > 1? line.split("registrar/")[1] :line;
+                            // launch dns or client
+                            if(!dnsClientLookup.equals(line)){
+                                dnsClient = true;
+                                dnsRequestType = "client";
+                                domainToLookUp = dnsClientLookup.split(" ")[0];
+                            }
+
+                            if(!dnsLookup.equals(line)){
+                                dnsRequestType = "localdns";
+                                dnsClientServer = true;
+                                domainToLookUp = dnsLookup.split(" ")[0];
+                            }
+                            if(!registrarLookup.equals(line)){
+                                dnsRequestType = "registrar";
+                                dnsRegistrar = true;
+                                domainToLookUp = registrarLookup.split(" ")[0];
+                            }
                         }
                         if (line.startsWith("Host: ")) {
                             domainName = line.replace("Host: ", "").split(":")[0];
                             hostName = line.replace("Host: ", "");
+
                         }
                         if(withSession && line.startsWith("Set-Cookie:")){
                             sessionInfo = line.replace("Set-Cookie:", "");
@@ -90,7 +127,11 @@ public class HttpStatic {
                                 HttpRequestWithSession request = new HttpRequestWithSession(s, dom.documentRoot, filename, hostName, sessionInfo);
                                 threadPool.addJob(request);
 
-                            }else {
+                            }else if(!dnsRequestType.equals("")){
+                                HttpDnsClientHandler request = new HttpDnsClientHandler(s, domainToLookUp,dnsRequestType);
+                                threadPool.addJob(request);
+                            }
+                            else {
                                 HttpRequestHandler request = new HttpRequestHandler(s, dom.documentRoot, filename, hostName);
                                 threadPool.addJob(request);
                             }
